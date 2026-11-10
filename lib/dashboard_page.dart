@@ -44,9 +44,7 @@ class DashboardPage extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Logout',
-            onPressed: () {
-              Navigator.of(context).popUntil((route) => route.isFirst);
-            },
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
           ),
         ],
       ),
@@ -125,8 +123,12 @@ class DashboardPage extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(label, style: Theme.of(context).textTheme.bodySmall),
-                    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -168,7 +170,7 @@ class _RevenuePainter extends CustomPainter {
     final maximum = values.fold<int>(0, (current, value) => value > current ? value : current);
     final scale = maximum == 0 ? 1.0 : maximum.toDouble();
 
-    final grid = Paint()..color = color.withOpacity(0.14)..strokeWidth = 1;
+    final grid = Paint()..color = color.withValues(alpha: 0.14)..strokeWidth = 1;
     for (var index = 0; index < 4; index++) {
       final y = verticalPadding + height * index / 3;
       canvas.drawLine(Offset(horizontalPadding, y), Offset(size.width - horizontalPadding, y), grid);
