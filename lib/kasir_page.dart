@@ -52,6 +52,7 @@ class _KasirPageState extends State<KasirPage> {
 
     setState(() {
       store.transactions.add(trx);
+      store.persist();
       cart.clear();
       customerCtrl.clear();
     });

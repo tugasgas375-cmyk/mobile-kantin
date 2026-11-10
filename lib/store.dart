@@ -1,8 +1,17 @@
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'models.dart';
 
 class Store {
   Store._();
   static final Store instance = Store._();
+
+  static const _productsKey = 'kantin_products';
+  static const _transactionsKey = 'kantin_transactions';
+
+  late SharedPreferences _prefs;
 
   final List<User> users = const [
     User(username: 'admin', password: 'admin', role: Role.admin),
@@ -10,16 +19,65 @@ class Store {
     User(username: 'customer', password: 'customer', role: Role.customer),
   ];
 
-  final List<Product> products = [
-    const Product(id: 'P01', name: 'Nasi Goreng', price: 15000),
-    const Product(id: 'P02', name: 'Mie Ayam', price: 12000),
-    const Product(id: 'P03', name: 'Ayam Geprek', price: 18000),
-    const Product(id: 'P04', name: 'Es Teh', price: 5000),
-    const Product(id: 'P05', name: 'Kopi Susu', price: 10000),
-    const Product(id: 'P06', name: 'Roti Bakar', price: 8000),
+  List<Product> products = [];
+  List<Transaction> transactions = [];
+
+  Future<void> init() async {
+    _prefs = await SharedPreferences.getInstance();
+
+    products = _loadProducts();
+    transactions = _loadTransactions();
+  }
+
+  List<Product> _loadProducts() {
+    final raw = _prefs.getString(_productsKey);
+    if (raw == null || raw.isEmpty) {
+      return _defaultProducts;
+    }
+
+    try {
+      final decoded = jsonDecode(raw) as List;
+      return decoded.map((e) => Product.fromJson(e)).toList();
+    } catch (_) {
+      return _defaultProducts;
+    }
+  }
+
+  List<Transaction> _loadTransactions() {
+    final raw = _prefs.getString(_transactionsKey);
+    if (raw == null || raw.isEmpty) {
+      return _defaultTransactions;
+    }
+
+    try {
+      final decoded = jsonDecode(raw) as List;
+      return decoded.map((e) => Transaction.fromJson(e)).toList();
+    } catch (_) {
+      return _defaultTransactions;
+    }
+  }
+
+  void persist() {
+    _prefs.setString(
+      _productsKey,
+      jsonEncode(products.map((product) => product.toJson()).toList()),
+    );
+    _prefs.setString(
+      _transactionsKey,
+      jsonEncode(transactions.map((transaction) => transaction.toJson()).toList()),
+    );
+  }
+
+  List<Product> get _defaultProducts => const [
+    Product(id: 'P01', name: 'Nasi Goreng', price: 15000),
+    Product(id: 'P02', name: 'Mie Ayam', price: 12000),
+    Product(id: 'P03', name: 'Ayam Geprek', price: 18000),
+    Product(id: 'P04', name: 'Es Teh', price: 5000),
+    Product(id: 'P05', name: 'Kopi Susu', price: 10000),
+    Product(id: 'P06', name: 'Roti Bakar', price: 8000),
   ];
 
-  final List<Transaction> transactions = [
+  List<Transaction> get _defaultTransactions => [
     Transaction(
       id: 'TRX-001',
       customer: 'Budi',
@@ -43,5 +101,6 @@ class Store {
 
   int revenue() => transactions.fold(0, (sum, t) => sum + t.total);
 
-  String formatRupiah(int v) => 'Rp ${v.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => '.')}';
+  String formatRupiah(int v) =>
+      'Rp ${v.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => '.')}';
 }

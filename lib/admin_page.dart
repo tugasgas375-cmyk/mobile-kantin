@@ -51,6 +51,7 @@ class _AdminPageState extends State<AdminPage> {
                       price: price,
                     ),
                   );
+                  store.persist();
                 });
               }
               Navigator.pop(ctx);
@@ -63,7 +64,10 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   void _deleteProduct(int index) {
-    setState(() => store.products.removeAt(index));
+    setState(() {
+      store.products.removeAt(index);
+      store.persist();
+    });
   }
 
   @override

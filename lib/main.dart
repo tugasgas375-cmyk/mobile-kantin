@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'store.dart';
 import 'dashboard_page.dart';
 
-void main() => runApp(const KasirApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Store.instance.init();
+  runApp(const KasirApp());
+}
 
 class KasirApp extends StatelessWidget {
   const KasirApp({super.key});

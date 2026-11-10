@@ -1,17 +1,35 @@
-# kasir_app
+# mobile-kantin
 
-A new Flutter project.
+Aplikasi kasir sederhana berbasis Flutter untuk mengelola menu, transaksi, dan dashboard berdasarkan peran pengguna.
 
-## Getting Started
+## Fitur utama
+- Login multi-role: admin, kasir, customer
+- Dashboard dengan ringkasan produk, transaksi, dan pendapatan
+- Halaman admin untuk mengelola produk dan melihat riwayat transaksi
+- Halaman kasir untuk membuat transaksi penjualan
+- Halaman customer untuk melihat menu kantin
+- Data produk dan transaksi tersimpan di perangkat menggunakan SharedPreferences
 
-This project is a starting point for a Flutter application.
+## Struktur aplikasi
+- `lib/main.dart` - entry point dan login
+- `lib/dashboard_page.dart` - dashboard utama setelah login
+- `lib/admin_page.dart` - panel admin
+- `lib/kasir_page.dart` - fitur kasir
+- `lib/customer_page.dart` - menu pelanggan
+- `lib/models.dart` - model data utama
+- `lib/store.dart` - data global dan penyimpanan lokal
 
-A few resources to get you started if this is your first Flutter project:
+## Cara menjalankan
+1. Pastikan Flutter sudah terinstal.
+2. Jalankan:
+   ```bash
+   flutter pub get
+   flutter run
+   ```
+3. Gunakan akun demo berikut:
+   - admin / admin
+   - kasir / kasir
+   - customer / customer
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Catatan
+Aplikasi ini masih bersifat demo dan cocok untuk pengembangan lanjutan, misalnya dengan backend API, autentikasi real, dan database yang lebih robust.
