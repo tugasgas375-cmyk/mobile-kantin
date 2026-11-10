@@ -1,141 +1,184 @@
-import 'dart:async';
-import 'dart:convert';
+class Role {
+  static const admin = 'Admin';
+  static const kasir = 'Kasir';
+  static const customer = 'Customer';
+}
 
-import 'package:shared_preferences/shared_preferences.dart';
+class User {
+  final String username;
+  final String password;
+  final String role;
 
-import 'models.dart';
-import 'services/firestore_service.dart';
+  const User({required this.username, required this.password, required this.role});
+}
 
-class Store {
-  Store._();
-  static final Store instance = Store._();
+class Product {
+  final String id;
+  final String name;
+  final int price;
+  final String category;
 
-  static const _productsKey = 'kantin_products';
-  static const _transactionsKey = 'kantin_transactions';
+  const Product({
+    required this.id,
+    required this.name,
+    required this.price,
+    this.category = 'Lainnya',
+  });
 
-  late SharedPreferences _prefs;
+  factory Product.fromJson(Map<String, dynamic> json) => Product(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? 'Produk',
+        price: (json['price'] as num? ?? 0).toInt(),
+        category: json['category'] as String? ?? 'Lainnya',
+      );
 
-  final List<User> users = const [
-    User(username: 'admin', password: 'admin', role: Role.admin),
-    User(username: 'kasir', password: 'kasir', role: Role.kasir),
-    User(username: 'customer', password: 'customer', role: Role.customer),
-  ];
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'price': price,
+        'category': category,
+      };
+}
 
-  List<Product> products = [];
-  List<Transaction> transactions = [];
+class CartItem {
+  final Product product;
+  int qty;
 
-  Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    products = _loadProducts();
-    transactions = _loadTransactions();
+  CartItem({required this.product, this.qty = 1});
+
+  factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
+        product: Product.fromJson(json['product'] as Map<String, dynamic>),
+        qty: (json['qty'] as num? ?? 1).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'product': product.toJson(),
+        'qty': qty,
+      };
+
+  int get subtotal => product.price * qty;
+}
+
+class Transaction {
+  final String id;
+  final String customer;
+  final List<CartItem> items;
+  final int total;
+  final DateTime time;
+
+  Transaction({
+    required this.id,
+    required this.customer,
+    required this.items,
+    required this.total,
+    required this.time,
+  });
+
+  factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
+        id: json['id'] as String? ?? '',
+        customer: json['customer'] as String? ?? 'Pelanggan',
+        items: (json['items'] as List? ?? const [])
+            .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        total: (json['total'] as num? ?? 0).toInt(),
+        time: DateTime.tryParse(json['time'] as String? ?? '') ?? DateTime.now(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'customer': customer,
+        'items': items.map((item) => item.toJson()).toList(),
+        'total': total,
+        'time': time.toIso8601String(),
+      };
+}
+
+enum OrderStatus { pending, processing, ready, completed }
+
+String orderStatusLabel(OrderStatus status) {
+  switch (status) {
+    case OrderStatus.pending:
+      return 'Menunggu';
+    case OrderStatus.processing:
+      return 'Diproses';
+    case OrderStatus.ready:
+      return 'Siap';
+    case OrderStatus.completed:
+      return 'Selesai';
   }
+}
 
-  List<Product> _loadProducts() {
-    final raw = _prefs.getString(_productsKey);
-    if (raw == null || raw.isEmpty) return _defaultProducts;
-    try {
-      final decoded = jsonDecode(raw) as List;
-      return decoded.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return _defaultProducts;
-    }
+OrderStatus orderStatusFromString(String? value) {
+  switch (value) {
+    case 'processing':
+      return OrderStatus.processing;
+    case 'ready':
+      return OrderStatus.ready;
+    case 'completed':
+      return OrderStatus.completed;
+    case 'pending':
+    default:
+      return OrderStatus.pending;
   }
+}
 
-  List<Transaction> _loadTransactions() {
-    final raw = _prefs.getString(_transactionsKey);
-    if (raw == null || raw.isEmpty) return _defaultTransactions;
-    try {
-      final decoded = jsonDecode(raw) as List;
-      return decoded.map((item) => Transaction.fromJson(item as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return _defaultTransactions;
-    }
-  }
+class OrderItem {
+  final Product product;
+  int qty;
 
-  Future<void> persist() async {
-    await Future.wait([
-      _prefs.setString(_productsKey, jsonEncode(products.map((product) => product.toJson()).toList())),
-      _prefs.setString(
-        _transactionsKey,
-        jsonEncode(transactions.map((transaction) => transaction.toJson()).toList()),
-      ),
-    ]);
-  }
+  OrderItem({required this.product, this.qty = 1});
 
-  String createProductId() => 'P${DateTime.now().microsecondsSinceEpoch}';
+  factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
+        product: Product.fromJson(json['product'] as Map<String, dynamic>),
+        qty: (json['qty'] as num? ?? 1).toInt(),
+      );
 
-  String createTransactionId() => 'TRX-${DateTime.now().microsecondsSinceEpoch}';
+  Map<String, dynamic> toJson() => {
+        'product': product.toJson(),
+        'qty': qty,
+      };
 
-  Future<void> submitCustomerOrder(String customerName, List<CartItem> items) async {
-    if (items.isEmpty) return;
+  int get subtotal => product.price * qty;
+}
 
-    final order = Order(
-      id: 'ORD-${DateTime.now().microsecondsSinceEpoch}',
-      customerName: customerName.trim().isEmpty ? 'Pelanggan' : customerName.trim(),
-      cashierName: 'Kasir',
-      items: items.map((item) => OrderItem(product: item.product, qty: item.qty)).toList(),
-      total: items.fold<int>(0, (sum, item) => sum + item.subtotal),
-      createdAt: DateTime.now(),
-      status: OrderStatus.pending,
-    );
+class Order {
+  final String id;
+  final String customerName;
+  final String cashierName;
+  final List<OrderItem> items;
+  final int total;
+  final DateTime createdAt;
+  final OrderStatus status;
 
-    final isCloudReady = await FirestoreService.instance.isReady();
-    if (isCloudReady) {
-      await FirestoreService.instance.addOrder(order);
-      return;
-    }
+  const Order({
+    required this.id,
+    required this.customerName,
+    required this.cashierName,
+    required this.items,
+    required this.total,
+    required this.createdAt,
+    required this.status,
+  });
 
-    final transaction = Transaction(
-      id: createTransactionId(),
-      customer: order.customerName,
-      items: items.map((item) => CartItem(product: item.product, qty: item.qty)).toList(),
-      total: order.total,
-      time: DateTime.now(),
-    );
+  factory Order.fromJson(Map<String, dynamic> json) => Order(
+        id: json['id'] as String? ?? json['orderId'] as String? ?? '',
+        customerName: json['customerName'] as String? ?? 'Pelanggan',
+        cashierName: json['cashierName'] as String? ?? 'Kasir',
+        items: (json['items'] as List? ?? const [])
+            .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
+            .toList(),
+        total: (json['total'] as num? ?? 0).toInt(),
+        createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+        status: orderStatusFromString(json['status'] as String?),
+      );
 
-    transactions.add(transaction);
-    await persist();
-  }
-
-  Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
-    final isCloudReady = await FirestoreService.instance.isReady();
-    if (!isCloudReady) return;
-    await FirestoreService.instance.updateOrderStatus(orderId, status);
-  }
-
-  Stream<List<Order>> watchOrders() => FirestoreService.instance.watchOrders();
-
-  List<Product> get _defaultProducts => const [
-        Product(id: 'P01', name: 'Nasi Goreng', price: 15000),
-        Product(id: 'P02', name: 'Mie Ayam', price: 12000),
-        Product(id: 'P03', name: 'Ayam Geprek', price: 18000),
-        Product(id: 'P04', name: 'Es Teh', price: 5000),
-        Product(id: 'P05', name: 'Kopi Susu', price: 10000),
-        Product(id: 'P06', name: 'Roti Bakar', price: 8000),
-      ];
-
-  List<Transaction> get _defaultTransactions => [
-        Transaction(
-          id: 'TRX-001',
-          customer: 'Budi',
-          items: [CartItem(product: const Product(id: 'P01', name: 'Nasi Goreng', price: 15000), qty: 2)],
-          total: 30000,
-          time: DateTime.now().subtract(const Duration(hours: 2)),
-        ),
-        Transaction(
-          id: 'TRX-002',
-          customer: 'Siti',
-          items: [
-            CartItem(product: const Product(id: 'P02', name: 'Mie Ayam', price: 12000), qty: 1),
-            CartItem(product: const Product(id: 'P04', name: 'Es Teh', price: 5000), qty: 2),
-          ],
-          total: 22000,
-          time: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-      ];
-
-  int revenue() => transactions.fold(0, (sum, transaction) => sum + transaction.total);
-
-  String formatRupiah(int value) =>
-      'Rp ${value.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => '.')}';
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'customerName': customerName,
+        'cashierName': cashierName,
+        'items': items.map((item) => item.toJson()).toList(),
+        'total': total,
+        'createdAt': createdAt.toIso8601String(),
+        'status': status.name,
+      };
 }

@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'models.dart';
 import 'store.dart';
-import 'kasir_page.dart';
-import 'customer_page.dart';
-import 'admin_page.dart';
 
 class DashboardPage extends StatelessWidget {
   final User user;
@@ -14,12 +11,15 @@ class DashboardPage extends StatelessWidget {
   List<int> _dailyRevenue(Store store) {
     final now = DateTime.now();
     return List.generate(7, (index) {
-      final date = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - index));
+      final date = DateTime(now.year, now.month, now.day)
+          .subtract(Duration(days: 6 - index));
       return store.transactions
-          .where((transaction) =>
-              transaction.time.year == date.year &&
-              transaction.time.month == date.month &&
-              transaction.time.day == date.day)
+          .where(
+            (transaction) =>
+                transaction.time.year == date.year &&
+                transaction.time.month == date.month &&
+                transaction.time.day == date.day,
+          )
           .fold<int>(0, (sum, transaction) => sum + transaction.total);
     });
   }
@@ -37,12 +37,12 @@ class DashboardPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
-              avatar: const Icon(Icons.person, size: 18),
+              avatar: const Icon(Icons.person_rounded, size: 18),
               label: Text('${user.username} • ${user.role}'),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             tooltip: 'Logout',
             onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
           ),
@@ -51,19 +51,42 @@ class DashboardPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Halo, ${user.username}!', style: theme.textTheme.headlineSmall),
+          Text(
+            'Halo, ${user.username}!',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text('Anda login sebagai ${user.role}', style: theme.textTheme.bodyMedium),
+          Text(
+            'Anda login sebagai ${user.role}',
+            style: theme.textTheme.bodyMedium,
+          ),
           const SizedBox(height: 20),
           Text('Ringkasan', style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              _statCard(context, Icons.inventory_2, 'Produk', '${store.products.length}'),
-              _statCard(context, Icons.receipt_long, 'Transaksi', '${store.transactions.length}'),
-              _statCard(context, Icons.payments, 'Pendapatan', store.formatRupiah(store.revenue())),
+              _statCard(
+                context,
+                Icons.inventory_2_rounded,
+                'Produk',
+                '${store.products.length}',
+              ),
+              _statCard(
+                context,
+                Icons.receipt_long_rounded,
+                'Transaksi',
+                '${store.transactions.length}',
+              ),
+              _statCard(
+                context,
+                Icons.payments_rounded,
+                'Pendapatan',
+                store.formatRupiah(store.revenue()),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -73,12 +96,20 @@ class DashboardPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Pendapatan 7 hari terakhir', style: theme.textTheme.titleMedium),
+                  Text(
+                    'Pendapatan 7 hari terakhir',
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 150,
                     width: double.infinity,
-                    child: CustomPaint(painter: _RevenuePainter(values: revenues, color: theme.colorScheme.primary)),
+                    child: CustomPaint(
+                      painter: _RevenuePainter(
+                        values: revenues,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -86,7 +117,10 @@ class DashboardPage extends StatelessWidget {
                     children: List.generate(7, (index) {
                       final date = DateTime.now().subtract(Duration(days: 6 - index));
                       const labels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-                      return Text(labels[date.weekday % 7], style: theme.textTheme.labelSmall);
+                      return Text(
+                        labels[date.weekday % 7],
+                        style: theme.textTheme.labelSmall,
+                      );
                     }),
                   ),
                 ],
@@ -97,17 +131,40 @@ class DashboardPage extends StatelessWidget {
           Text('Menu', style: theme.textTheme.titleLarge),
           const SizedBox(height: 8),
           if (user.role == Role.admin)
-            _menuTile(context, Icons.settings, 'Admin', 'Kelola produk dan lihat transaksi', const AdminPage()),
+            _menuTile(
+              context,
+              Icons.settings_rounded,
+              'Admin',
+              'Kelola produk dan lihat transaksi',
+              const AdminPage(),
+            ),
           if (user.role == Role.admin || user.role == Role.kasir)
-            _menuTile(context, Icons.shopping_cart, 'Kasir', 'Buat transaksi penjualan', const KasirPage()),
+            _menuTile(
+              context,
+              Icons.shopping_cart_rounded,
+              'Kasir',
+              'Buat transaksi penjualan',
+              const KasirPage(),
+            ),
           if (user.role == Role.customer || user.role == Role.kasir)
-            _menuTile(context, Icons.storefront, 'Menu Kantin', 'Lihat menu dan buat pesanan', const CustomerPage()),
+            _menuTile(
+              context,
+              Icons.storefront_rounded,
+              'Menu Kantin',
+              'Lihat menu dan buat pesanan',
+              const CustomerPage(),
+            ),
         ],
       ),
     );
   }
 
-  Widget _statCard(BuildContext context, IconData icon, String label, String value) {
+  Widget _statCard(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return SizedBox(
       width: 165,
       child: Card(
@@ -127,7 +184,9 @@ class DashboardPage extends StatelessWidget {
                       value,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -139,15 +198,23 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _menuTile(BuildContext context, IconData icon, String title, String subtitle, Widget page) {
+  Widget _menuTile(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    Widget page,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: Icon(icon),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => page)),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => page),
+        ),
       ),
     );
   }
@@ -170,10 +237,17 @@ class _RevenuePainter extends CustomPainter {
     final maximum = values.fold<int>(0, (current, value) => value > current ? value : current);
     final scale = maximum == 0 ? 1.0 : maximum.toDouble();
 
-    final grid = Paint()..color = color.withValues(alpha: 0.14)..strokeWidth = 1;
+    final grid = Paint()
+      ..color = color.withAlpha(36)
+      ..strokeWidth = 1;
+
     for (var index = 0; index < 4; index++) {
       final y = verticalPadding + height * index / 3;
-      canvas.drawLine(Offset(horizontalPadding, y), Offset(size.width - horizontalPadding, y), grid);
+      canvas.drawLine(
+        Offset(horizontalPadding, y),
+        Offset(size.width - horizontalPadding, y),
+        grid,
+      );
     }
 
     final points = List.generate(values.length, (index) {
@@ -202,5 +276,6 @@ class _RevenuePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RevenuePainter oldDelegate) => oldDelegate.values != values || oldDelegate.color != color;
+  bool shouldRepaint(covariant _RevenuePainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.color != color;
 }
