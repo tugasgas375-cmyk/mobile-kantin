@@ -1,113 +1,134 @@
 import 'package:flutter/material.dart';
 
+import 'models.dart';
 import 'store.dart';
-import 'dashboard_page.dart';
+import 'kasir_page.dart';
+import 'customer_page.dart';
+import 'admin_page.dart';
 
-void main() => runApp(const KasirApp());
+class DashboardPage extends StatelessWidget {
+  final User user;
 
-class KasirApp extends StatelessWidget {
-  const KasirApp({super.key});
+  const DashboardPage({super.key, required this.user});
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Aplikasi Kasir',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-      ),
-      home: const LoginPage(),
-    );
-  }
-}
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  String? _error;
-
-  void _login() {
-    final user = Store.instance.users
-        .where((u) => u.username == _userCtrl.text.trim() && u.password == _passCtrl.text)
-        .firstOrNull;
-
-    if (user == null) {
-      setState(() => _error = 'Username atau password salah');
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => DashboardPage(user: user)),
-    );
-  }
-
-  @override
-  void dispose() {
-    _userCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
+  List<int> _dailyRevenue(Store store) {
+    final now = DateTime.now();
+    return List.generate(7, (index) {
+      final date = DateTime(now.year, now.month, now.day).subtract(Duration(days: 6 - index));
+      return store.transactions
+          .where((transaction) =>
+              transaction.time.year == date.year &&
+              transaction.time.month == date.month &&
+              transaction.time.day == date.day)
+          .fold<int>(0, (sum, transaction) => sum + transaction.total);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final store = Store.instance;
+    final theme = Theme.of(context);
+    final revenues = _dailyRevenue(store);
+
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Chip(
+              avatar: const Icon(Icons.person, size: 18),
+              label: Text('${user.username} • ${user.role}'),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Logout',
+            onPressed: () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Halo, ${user.username}!', style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 4),
+          Text('Anda login sebagai ${user.role}', style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 20),
+          Text('Ringkasan', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              const Icon(Icons.point_of_sale, size: 72, color: Colors.teal),
-              const SizedBox(height: 8),
-              Text('Aplikasi Kasir', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text('Login ke akun Anda', style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _userCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
-                ),
+              _statCard(context, Icons.inventory_2, 'Produk', '${store.products.length}'),
+              _statCard(context, Icons.receipt_long, 'Transaksi', '${store.transactions.length}'),
+              _statCard(context, Icons.payments, 'Pendapatan', store.formatRupiah(store.revenue())),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Pendapatan 7 hari terakhir', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 150,
+                    width: double.infinity,
+                    child: CustomPaint(painter: _RevenuePainter(values: revenues, color: theme.colorScheme.primary)),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(7, (index) {
+                      final date = DateTime.now().subtract(Duration(days: 6 - index));
+                      const labels = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+                      return Text(labels[date.weekday % 7], style: theme.textTheme.labelSmall);
+                    }),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passCtrl,
-                obscureText: true,
-                onSubmitted: (_) => _login(),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Menu', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 8),
+          if (user.role == Role.admin)
+            _menuTile(context, Icons.settings, 'Admin', 'Kelola produk dan lihat transaksi', const AdminPage()),
+          if (user.role == Role.admin || user.role == Role.kasir)
+            _menuTile(context, Icons.shopping_cart, 'Kasir', 'Buat transaksi penjualan', const KasirPage()),
+          if (user.role == Role.customer || user.role == Role.kasir)
+            _menuTile(context, Icons.storefront, 'Menu Kantin', 'Lihat menu dan buat pesanan', const CustomerPage()),
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(BuildContext context, IconData icon, String label, String value) {
+    return SizedBox(
+      width: 165,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(icon, color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.bodySmall),
+                    Text(value, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  ],
                 ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _login,
-                  child: const Text('Login'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Demo:\nadmin/admin  |  kasir/kasir  |  customer/customer',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ],
           ),
@@ -115,4 +136,69 @@ class _LoginPageState extends State<LoginPage> {
       ),
     );
   }
+
+  Widget _menuTile(BuildContext context, IconData icon, String title, String subtitle, Widget page) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => page)),
+      ),
+    );
+  }
+}
+
+class _RevenuePainter extends CustomPainter {
+  final List<int> values;
+  final Color color;
+
+  const _RevenuePainter({required this.values, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2 || size.isEmpty) return;
+
+    const horizontalPadding = 8.0;
+    const verticalPadding = 12.0;
+    final width = size.width - horizontalPadding * 2;
+    final height = size.height - verticalPadding * 2;
+    final maximum = values.fold<int>(0, (current, value) => value > current ? value : current);
+    final scale = maximum == 0 ? 1.0 : maximum.toDouble();
+
+    final grid = Paint()..color = color.withOpacity(0.14)..strokeWidth = 1;
+    for (var index = 0; index < 4; index++) {
+      final y = verticalPadding + height * index / 3;
+      canvas.drawLine(Offset(horizontalPadding, y), Offset(size.width - horizontalPadding, y), grid);
+    }
+
+    final points = List.generate(values.length, (index) {
+      final x = horizontalPadding + width * index / (values.length - 1);
+      final y = verticalPadding + height - values[index] / scale * height;
+      return Offset(x, y);
+    });
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final point in points.skip(1)) {
+      path.lineTo(point.dx, point.dy);
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..strokeWidth = 3
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    for (final point in points) {
+      canvas.drawCircle(point, 4, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RevenuePainter oldDelegate) => oldDelegate.values != values || oldDelegate.color != color;
 }

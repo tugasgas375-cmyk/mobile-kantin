@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'models.dart';
 import 'store.dart';
 import 'dashboard_page.dart';
 
@@ -39,19 +40,21 @@ class _LoginPageState extends State<LoginPage> {
   String? _error;
 
   void _login() {
-    final user = Store.instance.users
-        .where((u) => u.username == _userCtrl.text.trim() && u.password == _passCtrl.text)
-        .firstOrNull;
+    User? matchedUser;
+    for (final user in Store.instance.users) {
+      if (user.username == _userCtrl.text.trim() && user.password == _passCtrl.text) {
+        matchedUser = user;
+        break;
+      }
+    }
 
-    if (user == null) {
+    if (matchedUser == null) {
       setState(() => _error = 'Username atau password salah');
       return;
     }
 
-    // Keep the login route beneath the dashboard so logout can pop back to it.
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => DashboardPage(user: user)),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DashboardPage(user: matchedUser!)),
     );
   }
 
@@ -103,10 +106,7 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton(
-                  onPressed: _login,
-                  child: const Text('Login'),
-                ),
+                child: FilledButton(onPressed: _login, child: const Text('Login')),
               ),
               const SizedBox(height: 16),
               const Text(
