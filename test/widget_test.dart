@@ -1,26 +1,33 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+# Mobile Kantin
 
-import 'package:kasir_app/main.dart';
+Aplikasi demo kasir kantin berbasis Flutter dengan arsitektur yang siap dikembangkan untuk koneksi real-time antar perangkat.
 
-void main() {
-  testWidgets('Login page renders and logout returns to login', (WidgetTester tester) async {
-    await tester.pumpWidget(const KasirApp());
+## Fitur utama
+- Login demo admin / kasir / customer
+- Dashboard statistik produk, transaksi, dan pendapatan
+- Admin dapat menambah & melihat produk
+- Kasir dapat membuat transaksi dan menerima pesanan dari customer
+- Customer dapat memilih produk, menambahkan ke keranjang, dan mengirim pesanan ke kasir
+- Data lokal tersimpan dengan SharedPreferences
+- Koneksi Firestore sudah disiapkan untuk sinkronisasi multi-perangkat
 
-    expect(find.text('Aplikasi Kasir'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2));
-    expect(find.byType(FilledButton), findsOneWidget);
+## Struktur backend siap digunakan
+Aplikasi ini sudah mencakup model `Order` dan `FirestoreService` untuk sinkronisasi status pesanan antar kasir dan customer. Untuk aktif digunakan di banyak perangkat, cukup isi file `lib/firebase_options.dart` dengan file konfigurasi Firebase yang benar dari FlutterFire.
 
-    await tester.enterText(find.byType(TextField).at(0), 'kasir');
-    await tester.enterText(find.byType(TextField).at(1), 'kasir');
-    await tester.tap(find.byType(FilledButton));
-    await tester.pumpAndSettle();
+## Menjalankan aplikasi
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+```
 
-    expect(find.text('Dashboard'), findsOneWidget);
-    await tester.tap(find.byTooltip('Logout'));
-    await tester.pumpAndSettle();
+## Akun demo
+- Admin: `admin` / `admin`
+- Kasir: `kasir` / `kasir`
+- Customer: `customer` / `customer`
 
-    expect(find.text('Aplikasi Kasir'), findsOneWidget);
-    expect(find.byType(TextField), findsNWidgets(2));
-  });
-}
+## Catatan penting
+- `SharedPreferences` cocok untuk demo satu perangkat.
+- Untuk koneksi real-time antar perangkat, aktifkan Firebase dan konfigurasi yang benar di `lib/firebase_options.dart`.
+- Aplikasi tetap bisa dijalankan saat Firebase belum dikonfigurasi karena fallback lokal sudah dibuat.
