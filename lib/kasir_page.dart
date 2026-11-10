@@ -15,13 +15,13 @@ class _KasirPageState extends State<KasirPage> {
   final cart = <CartItem>[];
   final customerCtrl = TextEditingController();
 
-  void _add(Product p) {
+  void _add(Product product) {
     setState(() {
-      final existing = cart.where((c) => c.product.id == p.id).firstOrNull;
+      final existing = cart.where((item) => item.product.id == product.id).firstOrNull;
       if (existing != null) {
         existing.qty++;
       } else {
-        cart.add(CartItem(product: p));
+        cart.add(CartItem(product: product));
       }
     });
   }
@@ -36,30 +36,36 @@ class _KasirPageState extends State<KasirPage> {
     });
   }
 
-  int get total => cart.fold(0, (sum, c) => sum + c.subtotal);
+  int get total => cart.fold(0, (sum, item) => sum + item.subtotal);
 
-  void _checkout() {
+  Future<void> _checkout() async {
     if (cart.isEmpty) return;
     final customer = customerCtrl.text.trim().isEmpty ? 'Umum' : customerCtrl.text.trim();
-
-    final trx = Transaction(
-      id: 'TRX-${(store.transactions.length + 1).toString().padLeft(3, '0')}',
+    final transaction = Transaction(
+      id: store.createTransactionId(),
       customer: customer,
-      items: List.from(cart),
+      items: cart.map((item) => CartItem(product: item.product, qty: item.qty)).toList(),
       total: total,
       time: DateTime.now(),
     );
 
+    store.transactions.add(transaction);
+    await store.persist();
+    if (!mounted) return;
+
     setState(() {
-      store.transactions.add(trx);
-      store.persist();
       cart.clear();
       customerCtrl.clear();
     });
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Transaksi ${trx.id} berhasil • Total ${store.formatRupiah(trx.total)}')),
+      SnackBar(content: Text('Transaksi ${transaction.id} berhasil • Total ${store.formatRupiah(transaction.total)}')),
     );
+  }
+
+  @override
+  void dispose() {
+    customerCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -71,21 +77,24 @@ class _KasirPageState extends State<KasirPage> {
           Expanded(
             flex: 3,
             child: ListView(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               children: [
-                const Text('Pilih Produk', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: store.products
-                      .map((p) => ActionChip(
-                            avatar: const Icon(Icons.add, size: 16),
-                            label: Text('${p.name}\n${store.formatRupiah(p.price)}'),
-                            onPressed: () => _add(p),
-                          ))
-                      .toList(),
-                ),
+                Text('Pilih Produk', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                if (store.products.isEmpty)
+                  const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Belum ada produk')))
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: store.products
+                        .map((product) => ActionChip(
+                              avatar: const Icon(Icons.add, size: 16),
+                              label: Text('${product.name}\n${store.formatRupiah(product.price)}'),
+                              onPressed: () => _add(product),
+                            ))
+                        .toList(),
+                  ),
               ],
             ),
           ),
@@ -95,7 +104,7 @@ class _KasirPageState extends State<KasirPage> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                   child: TextField(
                     controller: customerCtrl,
                     decoration: const InputDecoration(
@@ -111,21 +120,18 @@ class _KasirPageState extends State<KasirPage> {
                       : ListView(
                           padding: const EdgeInsets.all(12),
                           children: cart
-                              .map((c) => ListTile(
+                              .map((item) => ListTile(
                                     dense: true,
-                                    title: Text(c.product.name),
+                                    title: Text(item.product.name),
                                     subtitle: Text(
-                                        '${c.qty} x ${store.formatRupiah(c.product.price)} = ${store.formatRupiah(c.subtotal)}'),
+                                        '${item.qty} x ${store.formatRupiah(item.product.price)} = ${store.formatRupiah(item.subtotal)}'),
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.remove_circle_outline),
-                                          onPressed: () => _remove(c),
-                                        ),
+                                        IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => _remove(item)),
                                         IconButton(
                                           icon: const Icon(Icons.add_circle_outline),
-                                          onPressed: () => setState(() => c.qty++),
+                                          onPressed: () => setState(() => item.qty++),
                                         ),
                                       ],
                                     ),

@@ -1,35 +1,30 @@
-# mobile-kantin
+# Mobile Kantin
 
-Aplikasi kasir sederhana berbasis Flutter untuk mengelola menu, transaksi, dan dashboard berdasarkan peran pengguna.
+Aplikasi kasir dan pemesanan kantin sederhana berbasis Flutter.
 
-## Fitur utama
-- Login multi-role: admin, kasir, customer
-- Dashboard dengan ringkasan produk, transaksi, dan pendapatan
-- Halaman admin untuk mengelola produk dan melihat riwayat transaksi
-- Halaman kasir untuk membuat transaksi penjualan
-- Halaman customer untuk melihat menu kantin
-- Data produk dan transaksi tersimpan di perangkat menggunakan SharedPreferences
+## Fitur
+- Login demo dengan peran admin, kasir, dan customer.
+- Dashboard ringkasan produk, transaksi, dan pendapatan.
+- Admin dapat menambah/menghapus produk dengan validasi dan konfirmasi.
+- Kasir dapat membuat transaksi dan melihat transaksi di riwayat admin.
+- Customer dapat mencari menu, mengatur jumlah item di keranjang, lalu membuat pesanan.
+- Data produk dan transaksi disimpan secara lokal di perangkat menggunakan SharedPreferences.
 
-## Struktur aplikasi
-- `lib/main.dart` - entry point dan login
-- `lib/dashboard_page.dart` - dashboard utama setelah login
-- `lib/admin_page.dart` - panel admin
-- `lib/kasir_page.dart` - fitur kasir
-- `lib/customer_page.dart` - menu pelanggan
-- `lib/models.dart` - model data utama
-- `lib/store.dart` - data global dan penyimpanan lokal
+## Menjalankan aplikasi
+Pastikan Flutter SDK terpasang, lalu jalankan:
 
-## Cara menjalankan
-1. Pastikan Flutter sudah terinstal.
-2. Jalankan:
-   ```bash
-   flutter pub get
-   flutter run
-   ```
-3. Gunakan akun demo berikut:
-   - admin / admin
-   - kasir / kasir
-   - customer / customer
+```bash
+flutter pub get
+flutter run
+```
+
+Akun demo (untuk pengembangan):
+
+| Peran | Username | Password |
+|---|---|---|
+| Admin | `admin` | `admin` |
+| Kasir | `kasir` | `kasir` |
+| Customer | `customer` | `customer` |
 
 ## Catatan
-Aplikasi ini masih bersifat demo dan cocok untuk pengembangan lanjutan, misalnya dengan backend API, autentikasi real, dan database yang lebih robust.
+Aplikasi ini masih berupa demo: akun disimpan di kode dan data tersimpan di perangkat yang sama. Untuk penggunaan nyata, gunakan autentikasi dan backend/database server; SharedPreferences bukan database untuk data sensitif atau sinkronisasi multi-perangkat.
