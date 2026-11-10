@@ -16,20 +16,18 @@ class Product {
   final String id;
   final String name;
   final int price;
+  final String category;
 
-  const Product({required this.id, required this.name, required this.price});
+  const Product({required this.id, required this.name, required this.price, this.category = 'Lainnya'});
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
         id: json['id'] as String,
         name: json['name'] as String,
         price: (json['price'] as num).toInt(),
+        category: json['category'] as String? ?? 'Lainnya',
       );
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'price': price,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'price': price, 'category': category};
 }
 
 class CartItem {
@@ -43,10 +41,7 @@ class CartItem {
         qty: (json['qty'] as num).toInt(),
       );
 
-  Map<String, dynamic> toJson() => {
-        'product': product.toJson(),
-        'qty': qty,
-      };
+  Map<String, dynamic> toJson() => {'product': product.toJson(), 'qty': qty};
 
   int get subtotal => product.price * qty;
 }
@@ -58,13 +53,7 @@ class Transaction {
   final int total;
   final DateTime time;
 
-  Transaction({
-    required this.id,
-    required this.customer,
-    required this.items,
-    required this.total,
-    required this.time,
-  });
+  Transaction({required this.id, required this.customer, required this.items, required this.total, required this.time});
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
         id: json['id'] as String,
