@@ -48,10 +48,18 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    Navigator.pushReplacement(
+    // Keep the login route beneath the dashboard so logout can pop back to it.
+    Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => DashboardPage(user: user)),
     );
+  }
+
+  @override
+  void dispose() {
+    _userCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
   }
 
   @override
