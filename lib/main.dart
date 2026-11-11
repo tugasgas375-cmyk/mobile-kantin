@@ -1,161 +1,226 @@
-import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'customer_page.dart';
+import 'dashboard_page.dart';
+import 'firebase_options.dart';
 import 'models.dart';
-import 'services/firestore_service.dart';
+import 'store.dart';
 
-class Store {
-  Store._();
-  static final Store instance = Store._();
-
-  static const _productsKey = 'kantin_products';
-  static const _transactionsKey = 'kantin_transactions';
-
-  late SharedPreferences _prefs;
-
-  final List<User> users = const [
-    User(username: 'admin', password: 'admin', role: Role.admin),
-    User(username: 'kasir', password: 'kasir', role: Role.kasir),
-    User(username: 'customer', password: 'customer', role: Role.customer),
-  ];
-
-  List<Product> products = [];
-  List<Transaction> transactions = [];
-
-  Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    products = _loadProducts();
-    transactions = _loadTransactions();
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  } catch (_) {
+    // The app can still open in local/demo mode when Firebase is not configured.
   }
+  await Store.instance.init();
+  runApp(const KantinApp());
+}
 
-  List<Product> _loadProducts() {
-    final raw = _prefs.getString(_productsKey);
-    if (raw == null || raw.isEmpty) return _defaultProducts;
-    try {
-      final decoded = jsonDecode(raw) as List;
-      return decoded.map((item) => Product.fromJson(item as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return _defaultProducts;
-    }
-  }
+class KantinApp extends StatelessWidget {
+  const KantinApp({super.key});
 
-  List<Transaction> _loadTransactions() {
-    final raw = _prefs.getString(_transactionsKey);
-    if (raw == null || raw.isEmpty) return _defaultTransactions;
-    try {
-      final decoded = jsonDecode(raw) as List;
-      return decoded.map((item) => Transaction.fromJson(item as Map<String, dynamic>)).toList();
-    } catch (_) {
-      return _defaultTransactions;
-    }
-  }
-
-  Future<void> persist() async {
-    await Future.wait([
-      _prefs.setString(_productsKey, jsonEncode(products.map((product) => product.toJson()).toList())),
-      _prefs.setString(
-        _transactionsKey,
-        jsonEncode(transactions.map((transaction) => transaction.toJson()).toList()),
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Kantin',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        useMaterial3: true,
       ),
-    ]);
-  }
-
-  String createProductId() => 'P${DateTime.now().microsecondsSinceEpoch}';
-
-  String createTransactionId() => 'TRX-${DateTime.now().microsecondsSinceEpoch}';
-
-  Future<void> submitCustomerOrder(String customerName, List<CartItem> items) async {
-    if (items.isEmpty) return;
-
-    final order = Order(
-      id: 'ORD-${DateTime.now().microsecondsSinceEpoch}',
-      customerName: customerName.trim().isEmpty ? 'Pelanggan' : customerName.trim(),
-      cashierName: 'Kasir',
-      items: items.map((item) => OrderItem(product: item.product, qty: item.qty)).toList(),
-      total: items.fold<int>(0, (sum, item) => sum + item.subtotal),
-      createdAt: DateTime.now(),
-      status: OrderStatus.pending,
+      home: const RoleSelectionPage(),
     );
+  }
+}
 
-    final isCloudReady = await FirestoreService.instance.isReadyCheck();
-    if (isCloudReady) {
-      await FirestoreService.instance.addOrder(order);
+class RoleSelectionPage extends StatefulWidget {
+  const RoleSelectionPage({super.key});
+
+  @override
+  State<RoleSelectionPage> createState() => _RoleSelectionPageState();
+}
+
+class _RoleSelectionPageState extends State<RoleSelectionPage> {
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String? _selectedRole;
+  String? _errorMessage;
+
+  void _selectRole(String role) {
+    if (role == Role.customer) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const CustomerPage()),
+      );
       return;
     }
 
-    final transaction = Transaction(
-      id: createTransactionId(),
-      customer: order.customerName,
-      items: items.map((item) => CartItem(product: item.product, qty: item.qty)).toList(),
-      total: order.total,
-      time: DateTime.now(),
-    );
-
-    transactions.add(transaction);
-    await persist();
+    setState(() {
+      _selectedRole = role;
+      _errorMessage = null;
+      _usernameController.clear();
+      _passwordController.clear();
+    });
   }
 
-  Future<void> updateOrderStatus(String orderId, OrderStatus status) async {
-    final isCloudReady = await FirestoreService.instance.isReadyCheck();
-    if (!isCloudReady) return;
-    await FirestoreService.instance.updateOrderStatus(orderId, status);
-  }
+  void _login() {
+    final username = _usernameController.text.trim();
+    final user = Store.instance.users.where((candidate) {
+      return candidate.username == username &&
+          candidate.password == _passwordController.text &&
+          candidate.role == _selectedRole;
+    }).firstOrNull;
 
-  Stream<List<Order>> watchOrders() async* {
-    final cloudReady = await FirestoreService.instance.isReadyCheck();
-    if (cloudReady) {
-      yield* FirestoreService.instance.watchOrders();
+    if (user == null) {
+      setState(() => _errorMessage = 'Username atau password tidak sesuai dengan role.');
       return;
     }
 
-    final fallback = transactions
-        .map((transaction) => Order(
-              id: transaction.id,
-              customerName: transaction.customer,
-              cashierName: 'Kasir',
-              items: transaction.items
-                  .map((item) => OrderItem(product: item.product, qty: item.qty))
-                  .toList(),
-              total: transaction.total,
-              createdAt: transaction.time,
-              status: OrderStatus.pending,
-            ))
-        .toList();
-    yield fallback;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => DashboardPage(user: user)),
+    );
   }
 
-  List<Product> get _defaultProducts => const [
-        Product(id: 'P01', name: 'Nasi Goreng', price: 15000, category: 'Makanan'),
-        Product(id: 'P02', name: 'Mie Ayam', price: 12000, category: 'Makanan'),
-        Product(id: 'P03', name: 'Ayam Geprek', price: 18000, category: 'Makanan'),
-        Product(id: 'P04', name: 'Es Teh', price: 5000, category: 'Minuman'),
-        Product(id: 'P05', name: 'Kopi Susu', price: 10000, category: 'Minuman'),
-        Product(id: 'P06', name: 'Roti Bakar', price: 8000, category: 'Camilan'),
-      ];
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-  List<Transaction> get _defaultTransactions => [
-        Transaction(
-          id: 'TRX-001',
-          customer: 'Budi',
-          items: [CartItem(product: const Product(id: 'P01', name: 'Nasi Goreng', price: 15000, category: 'Makanan'), qty: 2)],
-          total: 30000,
-          time: DateTime.now().subtract(const Duration(hours: 2)),
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: _selectedRole == null
+          ? null
+          : AppBar(
+              leading: IconButton(
+                tooltip: 'Kembali pilih role',
+                onPressed: () => setState(() {
+                  _selectedRole = null;
+                  _errorMessage = null;
+                }),
+                icon: const Icon(Icons.arrow_back),
+              ),
+              title: Text('Login ${_selectedRole == Role.admin ? 'Admin' : 'Kasir'}'),
+            ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: _selectedRole == null
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront, size: 72, color: theme.colorScheme.primary),
+                        const SizedBox(height: 12),
+                        Text('Selamat Datang', style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text('Pilih role untuk melanjutkan', style: theme.textTheme.bodyLarge),
+                        const SizedBox(height: 28),
+                        _RoleCard(
+                          icon: Icons.restaurant,
+                          title: 'Customer',
+                          subtitle: 'Lihat menu dan pesan tanpa login',
+                          onTap: () => _selectRole(Role.customer),
+                        ),
+                        const SizedBox(height: 12),
+                        _RoleCard(
+                          icon: Icons.admin_panel_settings,
+                          title: 'Admin',
+                          subtitle: 'Login untuk mengelola kantin',
+                          onTap: () => _selectRole(Role.admin),
+                        ),
+                        const SizedBox(height: 12),
+                        _RoleCard(
+                          icon: Icons.point_of_sale,
+                          title: 'Kasir',
+                          subtitle: 'Login untuk mengelola pesanan dan transaksi',
+                          onTap: () => _selectRole(Role.kasir),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _selectedRole == Role.admin ? Icons.admin_panel_settings : Icons.point_of_sale,
+                          size: 64,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(height: 12),
+                        Text('Login ${_selectedRole == Role.admin ? 'Admin' : 'Kasir'}', style: theme.textTheme.headlineSmall),
+                        const SizedBox(height: 24),
+                        TextField(
+                          controller: _usernameController,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Username',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.person),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          onSubmitted: (_) => _login(),
+                          decoration: const InputDecoration(
+                            labelText: 'Password',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.lock),
+                          ),
+                        ),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(_errorMessage!, style: TextStyle(color: theme.colorScheme.error)),
+                        ],
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(onPressed: _login, child: const Text('Login')),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('Demo: admin/admin  •  kasir/kasir', style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+            ),
+          ),
         ),
-        Transaction(
-          id: 'TRX-002',
-          customer: 'Siti',
-          items: [
-            CartItem(product: const Product(id: 'P02', name: 'Mie Ayam', price: 12000, category: 'Makanan'), qty: 1),
-            CartItem(product: const Product(id: 'P04', name: 'Es Teh', price: 5000, category: 'Minuman'), qty: 2),
-          ],
-          total: 22000,
-          time: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-      ];
+      ),
+    );
+  }
+}
 
-  int revenue() => transactions.fold(0, (sum, transaction) => sum + transaction.total);
+class _RoleCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
 
-  String formatRupiah(int value) =>
-      'Rp ${value.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (match) => '.')}';
+  const _RoleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        leading: CircleAvatar(child: Icon(icon)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
+    );
+  }
 }
