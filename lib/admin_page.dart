@@ -3,145 +3,229 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 import 'store.dart';
 
-class AdminPage extends StatefulWidget {
-  const AdminPage({super.key});
+class KasirPage extends StatefulWidget {
+  const KasirPage({super.key});
 
   @override
-  State<AdminPage> createState() => _AdminPageState();
+  State<KasirPage> createState() => _KasirPageState();
 }
 
-class _AdminPageState extends State<AdminPage> {
+class _KasirPageState extends State<KasirPage> {
   final store = Store.instance;
-  static const _categories = ['Makanan', 'Minuman', 'Camilan', 'Lainnya'];
+  final cart = <CartItem>[];
+  final customerCtrl = TextEditingController();
 
-  Future<void> _addProduct() async {
-    final formKey = GlobalKey<FormState>();
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    var category = _categories.first;
-
-    final product = await showDialog<Product>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, updateDialog) => AlertDialog(
-          title: const Text('Tambah Produk'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TextFormField(
-                  controller: nameCtrl, autofocus: true, maxLength: 50,
-                  decoration: const InputDecoration(labelText: 'Nama produk', border: OutlineInputBorder()),
-                  validator: (value) => value == null || value.trim().isEmpty ? 'Nama produk wajib diisi' : null,
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder()),
-                  items: _categories.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
-                  onChanged: (value) { if (value != null) updateDialog(() => category = value); },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: priceCtrl, keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Harga (Rp)', border: OutlineInputBorder()),
-                  validator: (value) {
-                    final price = int.tryParse(value?.trim() ?? '');
-                    return price == null || price <= 0 ? 'Masukkan harga lebih dari Rp 0' : null;
-                  },
-                ),
-              ]),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-            FilledButton(
-              onPressed: () {
-                if (!formKey.currentState!.validate()) return;
-                Navigator.pop(ctx, Product(
-                  id: store.createProductId(), name: nameCtrl.text.trim(),
-                  price: int.parse(priceCtrl.text.trim()), category: category,
-                ));
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    nameCtrl.dispose();
-    priceCtrl.dispose();
-    if (product == null || !mounted) return;
-    setState(() => store.products.add(product));
-    await store.persist();
+  void _add(Product product) {
+    setState(() {
+      final existing = cart.where((item) => item.product.id == product.id).firstOrNull;
+      if (existing != null) {
+        existing.qty++;
+      } else {
+        cart.add(CartItem(product: product));
+      }
+    });
   }
 
-  Future<void> _deleteProduct(Product product) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus produk?'),
-        content: Text('Produk "${product.name}" akan dihapus dari menu.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          FilledButton.tonal(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hapus')),
-        ],
-      ),
+  void _remove(CartItem item) {
+    setState(() {
+      if (item.qty > 1) {
+        item.qty--;
+      } else {
+        cart.remove(item);
+      }
+    });
+  }
+
+  int get total => cart.fold(0, (sum, item) => sum + item.subtotal);
+
+  Future<void> _checkout() async {
+    if (cart.isEmpty) return;
+
+    final customer = customerCtrl.text.trim().isEmpty ? 'Umum' : customerCtrl.text.trim();
+    final transaction = Transaction(
+      id: store.createTransactionId(),
+      customer: customer,
+      items: cart.map((item) => CartItem(product: item.product, qty: item.qty)).toList(),
+      total: total,
+      time: DateTime.now(),
     );
-    if (confirmed != true || !mounted) return;
-    setState(() => store.products.removeWhere((item) => item.id == product.id));
+
+    store.transactions.add(transaction);
     await store.persist();
+    if (!mounted) return;
+
+    setState(() {
+      cart.clear();
+      customerCtrl.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Transaksi ${transaction.id} berhasil • Total ${store.formatRupiah(transaction.total)}')),
+    );
+  }
+
+  Future<void> _advanceOrder(Order order) async {
+    final nextStatus = switch (order.status) {
+      OrderStatus.pending => OrderStatus.processing,
+      OrderStatus.processing => OrderStatus.ready,
+      OrderStatus.ready => OrderStatus.completed,
+      OrderStatus.completed => OrderStatus.completed,
+    };
+
+    await store.updateOrderStatus(order.id, nextStatus);
+  }
+
+  @override
+  void dispose() {
+    customerCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Kelola Kantin'),
-          bottom: const TabBar(tabs: [
-            Tab(icon: Icon(Icons.restaurant_menu), text: 'Produk'),
-            Tab(icon: Icon(Icons.receipt_long), text: 'Transaksi'),
-          ]),
-        ),
-        floatingActionButton: FloatingActionButton.extended(onPressed: _addProduct, icon: const Icon(Icons.add), label: const Text('Produk')),
-        body: TabBarView(children: [
-          store.products.isEmpty
-              ? const Center(child: Text('Belum ada produk. Tambahkan produk pertama.'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16), itemCount: store.products.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final product = store.products[index];
-                    return Card(child: ListTile(
-                      leading: CircleAvatar(child: Icon(product.category == 'Minuman' ? Icons.local_cafe : Icons.fastfood)),
-                      title: Text(product.name),
-                      subtitle: Text('${product.category} • ${store.formatRupiah(product.price)}'),
-                      trailing: IconButton(tooltip: 'Hapus ${product.name}', icon: Icon(Icons.delete_outline, color: theme.colorScheme.error), onPressed: () => _deleteProduct(product)),
-                    ));
+    return Scaffold(
+      appBar: AppBar(title: const Text('Kasir')),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 3,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('Pilih Produk', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 12),
+                if (store.products.isEmpty)
+                  const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Belum ada produk')))
+                else
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: store.products
+                        .map((product) => ActionChip(
+                              avatar: const Icon(Icons.add, size: 16),
+                              label: Text('${product.name}\n${store.formatRupiah(product.price)}'),
+                              onPressed: () => _add(product),
+                            ))
+                        .toList(),
+                  ),
+                const SizedBox(height: 20),
+                Text('Pesanan pelanggan', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 8),
+                StreamBuilder<List<Order>>(
+                  stream: store.watchOrders(),
+                  builder: (context, snapshot) {
+                    final orders = snapshot.data ?? const [];
+                    if (orders.isEmpty) {
+                      return const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text('Belum ada pesanan masuk.'),
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      children: orders.map((order) {
+                        final canAdvance = order.status != OrderStatus.completed;
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(order.customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Text(orderStatusLabel(order.status)),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(order.items.map((item) => '${item.product.name} x${item.qty}').join(', ')),
+                                const SizedBox(height: 6),
+                                Text('Total: ${store.formatRupiah(order.total)}'),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: FilledButton.tonal(
+                                    onPressed: canAdvance ? () => _advanceOrder(order) : null,
+                                    child: Text(canAdvance ? 'Ubah status' : 'Selesai'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
                   },
                 ),
-          store.transactions.isEmpty
-              ? const Center(child: Text('Belum ada transaksi'))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16), itemCount: store.transactions.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final transaction = store.transactions[store.transactions.length - 1 - index];
-                    return Card(child: ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.receipt_long)),
-                      title: Text('${transaction.id} • ${transaction.customer}'),
-                      subtitle: Text('${transaction.items.map((item) => '${item.product.name} x${item.qty}').join(', ')}\n'
-                          '${transaction.time.day}/${transaction.time.month}/${transaction.time.year} ${transaction.time.hour.toString().padLeft(2, '0')}:${transaction.time.minute.toString().padLeft(2, '0')}'),
-                      isThreeLine: true,
-                      trailing: Text(store.formatRupiah(transaction.total), style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ));
-                  },
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            flex: 2,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: TextField(
+                    controller: customerCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama customer',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
                 ),
-        ]),
+                Expanded(
+                  child: cart.isEmpty
+                      ? const Center(child: Text('Keranjang kosong'))
+                      : ListView(
+                          padding: const EdgeInsets.all(12),
+                          children: cart
+                              .map((item) => ListTile(
+                                    dense: true,
+                                    title: Text(item.product.name),
+                                    subtitle: Text(
+                                        '${item.qty} x ${store.formatRupiah(item.product.price)} = ${store.formatRupiah(item.subtotal)}'),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(icon: const Icon(Icons.remove_circle_outline), onPressed: () => _remove(item)),
+                                        IconButton(
+                                          icon: const Icon(Icons.add_circle_outline),
+                                          onPressed: () => setState(() => item.qty++),
+                                        ),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
+                ),
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('Total: ${store.formatRupiah(total)}',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ),
+                        FilledButton.icon(
+                          onPressed: cart.isEmpty ? null : _checkout,
+                          icon: const Icon(Icons.payment),
+                          label: const Text('Bayar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

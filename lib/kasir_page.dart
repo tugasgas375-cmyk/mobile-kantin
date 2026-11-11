@@ -144,8 +144,11 @@ class _CustomerPageState extends State<CustomerPage> {
       appBar: AppBar(
         title: const Text('Menu Kantin'),
         actions: [
-          IconButton(tooltip: 'Keranjang', onPressed: _showCart,
-              icon: Badge(label: Text('$cartCount'), child: const Icon(Icons.shopping_bag_outlined))),
+          IconButton(
+            tooltip: 'Keranjang',
+            onPressed: _showCart,
+            icon: Badge(label: Text('$cartCount'), child: const Icon(Icons.shopping_bag_outlined)),
+          ),
           const SizedBox(width: 8),
         ],
       ),
