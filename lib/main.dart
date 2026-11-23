@@ -3,16 +3,17 @@ import 'package:flutter/material.dart';
 
 import 'customer_page.dart';
 import 'dashboard_page.dart';
-import 'firebase_options.dart';
 import 'models.dart';
 import 'store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    // Uses native Firebase configuration when available. The app still starts
+    // in local/demo mode when Firebase has not been configured.
+    await Firebase.initializeApp();
   } catch (_) {
-    // The app can still open in local/demo mode when Firebase is not configured.
+    // Firebase can be configured later without preventing local/demo startup.
   }
   await Store.instance.init();
   runApp(const KantinApp());
