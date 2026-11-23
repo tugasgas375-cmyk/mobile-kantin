@@ -1,33 +1,34 @@
-# Mobile Kantin
+import 'package:flutter_test/flutter_test.dart';
 
-Aplikasi demo kasir kantin berbasis Flutter dengan arsitektur yang siap dikembangkan untuk koneksi real-time antar perangkat.
+import 'package:kasir_app/main.dart';
 
-## Fitur utama
-- Login demo admin / kasir / customer
-- Dashboard statistik produk, transaksi, dan pendapatan
-- Admin dapat menambah & melihat produk
-- Kasir dapat membuat transaksi dan menerima pesanan dari customer
-- Customer dapat memilih produk, menambahkan ke keranjang, dan mengirim pesanan ke kasir
-- Data lokal tersimpan dengan SharedPreferences
-- Koneksi Firestore sudah disiapkan untuk sinkronisasi multi-perangkat
+void main() {
+  testWidgets('Role selection displays all roles', (WidgetTester tester) async {
+    await tester.pumpWidget(const KantinApp());
 
-## Struktur backend siap digunakan
-Aplikasi ini sudah mencakup model `Order` dan `FirestoreService` untuk sinkronisasi status pesanan antar kasir dan customer. Untuk aktif digunakan di banyak perangkat, cukup isi file `lib/firebase_options.dart` dengan file konfigurasi Firebase yang benar dari FlutterFire.
+    expect(find.text('Customer'), findsOneWidget);
+    expect(find.text('Admin'), findsOneWidget);
+    expect(find.text('Kasir'), findsOneWidget);
+  });
 
-## Menjalankan aplikasi
-```powershell
-flutter pub get
-flutter analyze
-flutter test
-flutter run
-```
+  testWidgets('Customer role opens menu page', (WidgetTester tester) async {
+    await tester.pumpWidget(const KantinApp());
+    await tester.tap(find.text('Customer'));
+    await tester.pumpAndSettle();
 
-## Akun demo
-- Admin: `admin` / `admin`
-- Kasir: `kasir` / `kasir`
-- Customer: `customer` / `customer`
+    expect(find.byType(CustomerPage), findsOneWidget);
+  });
 
-## Catatan penting
-- `SharedPreferences` cocok untuk demo satu perangkat.
-- Untuk koneksi real-time antar perangkat, aktifkan Firebase dan konfigurasi yang benar di `lib/firebase_options.dart`.
-- Aplikasi tetap bisa dijalankan saat Firebase belum dikonfigurasi karena fallback lokal sudah dibuat.
+  testWidgets('Admin login rejects invalid credentials', (WidgetTester tester) async {
+    await tester.pumpWidget(const KantinApp());
+    await tester.tap(find.text('Admin'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).at(0), 'admin');
+    await tester.enterText(find.byType(TextField).at(1), 'salah');
+    await tester.tap(find.text('Login'));
+    await tester.pump();
+
+    expect(find.text('Username atau password tidak sesuai dengan role.'), findsOneWidget);
+  });
+}

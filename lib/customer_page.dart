@@ -1,128 +1,151 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'dashboard_page.dart';
-import 'firebase_options.dart';
+import 'models.dart';
 import 'store.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  } catch (_) {
-    // Firebase can be configured later for real-time sync across devices.
-  }
-  await Store.instance.init();
-  runApp(const KasirApp());
-}
-
-class KasirApp extends StatelessWidget {
-  const KasirApp({super.key});
+class CustomerPage extends StatefulWidget {
+  const CustomerPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Aplikasi Kasir',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
-        useMaterial3: true,
-      ),
-      home: const LoginPage(),
-    );
+  State<CustomerPage> createState() => _CustomerPageState();
+}
+
+class _CustomerPageState extends State<CustomerPage> {
+  final Store store = Store.instance;
+  final cart = <CartItem>[];
+  final customerNameController = TextEditingController(text: 'Pelanggan');
+  String search = '';
+
+  int get total => cart.fold(0, (sum, item) => sum + item.subtotal);
+
+  List<Product> get filteredProducts => store.products.where((product) {
+        return product.name.toLowerCase().contains(search.toLowerCase());
+      }).toList();
+
+  void addProduct(Product product) {
+    setState(() {
+      final existing = cart.where((item) => item.product.id == product.id).firstOrNull;
+      if (existing == null) {
+        cart.add(CartItem(product: product));
+      } else {
+        existing.qty++;
+      }
+    });
   }
-}
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  Future<void> checkout() async {
+    if (cart.isEmpty) return;
+    await store.submitCustomerOrder(customerNameController.text, cart.toList());
+    if (!mounted) return;
 
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
-  String? _error;
-
-  void _login() {
-    final user = Store.instance.users
-        .where((u) => u.username == _userCtrl.text.trim() && u.password == _passCtrl.text)
-        .firstOrNull;
-
-    if (user == null) {
-      setState(() => _error = 'Username atau password salah');
-      return;
-    }
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => DashboardPage(user: user)),
+    setState(() => cart.clear());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pesanan dikirim ke kasir')),
     );
   }
 
   @override
   void dispose() {
-    _userCtrl.dispose();
-    _passCtrl.dispose();
+    customerNameController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cartCount = cart.fold(0, (sum, item) => sum + item.qty);
+
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.point_of_sale, size: 72, color: Colors.teal),
-              const SizedBox(height: 8),
-              Text('Aplikasi Kasir', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 4),
-              Text('Login ke akun Anda', style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _userCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
-                ),
+      appBar: AppBar(title: const Text('Menu Kantin')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              onChanged: (value) => setState(() => search = value),
+              decoration: const InputDecoration(
+                hintText: 'Cari menu',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passCtrl,
-                obscureText: true,
-                onSubmitted: (_) => _login(),
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
-              ],
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _login,
-                  child: const Text('Login'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Demo:\nadmin/admin  |  kasir/kasir  |  customer/customer',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-            ],
+            ),
           ),
-        ),
+          Expanded(
+            child: filteredProducts.isEmpty
+                ? const Center(child: Text('Menu tidak ditemukan'))
+                : GridView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 240,
+                      mainAxisExtent: 190,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = filteredProducts[index];
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Center(
+                                  child: CircleAvatar(
+                                    radius: 32,
+                                    child: Icon(
+                                      product.category == 'Minuman'
+                                          ? Icons.local_cafe
+                                          : Icons.fastfood,
+                                      size: 32,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Text(product.name,
+                                  style: const TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Expanded(child: Text(store.formatRupiah(product.price))),
+                                  IconButton(
+                                    onPressed: () => addProduct(product),
+                                    icon: const Icon(Icons.add_circle),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: customerNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nama pelanggan',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: cart.isEmpty ? null : checkout,
+                    child: Text('Pesan • ${store.formatRupiah(total)} ($cartCount)'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
